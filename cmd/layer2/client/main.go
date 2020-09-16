@@ -22,7 +22,7 @@ func main() {
 	}
 
 	// Select the eth0 interface to use for Ethernet traffic.
-	ifi, err := net.InterfaceByName("lo0")
+	ifi, err := net.InterfaceByName("en0")
 	if err != nil {
 		log.Fatalf("failed to open interface: %v", err)
 	}
