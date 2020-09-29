@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/hex"
 	"log"
 	"net"
 	"strconv"
@@ -17,7 +16,7 @@ type scanner struct {
 
 func (s *scanner) Scan(port string) {
 	log.Printf("Scanning %s\n", port)
-	addr := net.JoinHostPort("127.0.0.1", port)
+	addr := net.JoinHostPort("", port)
 	udpAddr, err := net.ResolveUDPAddr("udp", addr)
 	if err != nil {
 		log.Println(err)
@@ -32,12 +31,10 @@ func (s *scanner) Scan(port string) {
 
 	defer conn.Close()
 
-	b := []byte{02, 00, 00, 00, 45, 00, 00, 1c, 51, 3a, 00, 00, 2d, 11, 00, 00, 7f, 00, 00, 01, 7f, 00, 00, 01, c1, d5, 00, 8a, 00, 08, 3f, 7c}
+	_, err = conn.Write([]byte{})
 	if err != nil {
 		log.Println(err)
 	}
-
-	conn.Write(b)
 
 	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 
