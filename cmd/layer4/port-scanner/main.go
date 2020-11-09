@@ -1,22 +1,39 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net"
+	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
 
+type Status string
+
+const (
+	Open    Status = "open"
+	Unknown Status = "unknown"
+	Closed  Status = "closed"
+)
+
 type scanner struct {
-	openPorts []string
-	m         sync.Mutex
-	wg        sync.WaitGroup
+	portStatuses map[int]Status
+	m            sync.Mutex
+	wg           sync.WaitGroup
 }
 
-func (s *scanner) Scan(port string) {
-	log.Printf("Scanning %s\n", port)
-	addr := net.JoinHostPort("", port)
+// Scan a port by attempting to read and write from it three times.
+// If you can write to a port and it writes back an empty response it
+// is definitely open.
+// If writing to the port produces an error it is definitely closed.
+// If you can write to a port but its response times out, it is unknown
+// whether or not it is open.
+func (s *scanner) Scan(port int) {
+	p := strconv.Itoa(port)
+	addr := net.JoinHostPort("", p)
 	udpAddr, err := net.ResolveUDPAddr("udp", addr)
 	if err != nil {
 		log.Println(err)
@@ -28,49 +45,89 @@ func (s *scanner) Scan(port string) {
 		log.Println(err)
 		return
 	}
-
 	defer conn.Close()
 
-	_, err = conn.Write([]byte{})
-	if err != nil {
-		log.Println(err)
+	var (
+		retry    int    = 0
+		maxTries int    = 3
+		status   Status = ""
+	)
+	for retry < maxTries && status != Open {
+		retry++
+
+		_, err = conn.Write([]byte{})
+		if err != nil {
+			status = Closed
+		}
+
+		conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+
+		buf := make([]byte, 1000)
+		_, err := conn.Read(buf)
+		if err != nil {
+			opErr, ok := err.(*net.OpError)
+
+			if ok && opErr.Temporary() {
+				status = Unknown
+			} else {
+				status = Closed
+			}
+		} else {
+			status = Open
+			break
+		}
 	}
 
-	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	s.m.Lock()
+	defer s.m.Unlock()
+	s.portStatuses[port] = status
+}
 
-	buf := make([]byte, 1000)
-	n, err := conn.Read(buf)
-	if err == nil {
-		s.m.Lock()
-		defer s.m.Unlock()
-		s.openPorts = append(s.openPorts, port)
-	} else {
-		log.Println(err)
+func (s *scanner) String() string {
+	s.m.Lock()
+	defer s.m.Unlock()
+
+	var keys []int
+	for k := range s.portStatuses {
+		keys = append(keys, k)
 	}
 
-	log.Println(n)
+	sort.Ints(keys)
+
+	str := strings.Builder{}
+	for _, k := range keys {
+		status := s.portStatuses[k]
+
+		if status == Open || status == Unknown {
+			s := fmt.Sprintf("%d: %s\n", k, status)
+			str.WriteString(s)
+		}
+	}
+
+	return str.String()
 }
 
 func main() {
-	s := &scanner{}
+	s := &scanner{
+		portStatuses: map[int]Status{},
+	}
 
 	conSema := make(chan struct{}, 10)
 	wg := sync.WaitGroup{}
 
-	for i := 137; i <= 138; i++ {
+	for i := 1; i <= 200; i++ {
 		wg.Add(1)
 		go func(port int) {
 			defer wg.Done()
 
 			conSema <- struct{}{}
 
-			p := strconv.Itoa(port)
-			s.Scan(p)
+			s.Scan(port)
 
 			<-conSema
 		}(i)
 	}
 
 	wg.Wait()
-	log.Printf("Open Ports:\n%v\n", s.openPorts)
+	log.Printf("Port Status:\n%s\n", s.String())
 }
