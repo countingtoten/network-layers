@@ -5,7 +5,8 @@ import (
 )
 
 func handleConnection(c net.Conn) {
-
+	c.Write([]byte("HTTP/1.1 200 OK\nContent-Type: text/html\n\n<HTML>Hello World</HTML>\n"))
+	c.Close()
 }
 
 func main() {
