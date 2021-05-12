@@ -3,12 +3,14 @@ package main
 import (
 	"log"
 	"sync"
+	"time"
 
 	"github.com/countingtoten/network-layers/scanner"
 )
 
 func main() {
-	s := scanner.NewUDP()
+	timeout := 5 * time.Second
+	s := scanner.NewUDP(timeout)
 
 	conSema := make(chan struct{}, 100)
 	wg := sync.WaitGroup{}

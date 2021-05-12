@@ -17,17 +17,25 @@ const (
 	Open    Status = "open"
 	Unknown Status = "unknown"
 	Closed  Status = "closed"
+
+	defaultTimeout = 5 * time.Second
 )
 
 type ScannerUDP struct {
 	portStatuses map[int]Status
+	timeout      time.Duration
 	m            sync.Mutex
 	wg           sync.WaitGroup
 }
 
-func NewUDP() *ScannerUDP {
+func NewUDP(timeout time.Duration) *ScannerUDP {
+	if timeout == 0 {
+		timeout = defaultTimeout
+	}
+
 	return &ScannerUDP{
 		portStatuses: map[int]Status{},
+		timeout:      timeout,
 	}
 }
 
